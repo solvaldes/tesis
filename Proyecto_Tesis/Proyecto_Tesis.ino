@@ -1,14 +1,21 @@
 #include <PS2Mouse.h>
 #include <NeoPixelBus.h>
 #include <NeoPixelAnimator.h>
+#include <MouseDevice.h>
 
-#define MOUSE_DATA_2 7 //naranja
-#define MOUSE_CLOCK_2 8 //blanco
-#define MOUSE_DATA 5 //naranja
-#define MOUSE_CLOCK 6 //blanco
+#define MOUSE_DATA_3 9 //naranja
+#define MOUSE_CLOCK_3 10 //blanco
+#define MOUSE_DATA_4 11 //naranja
+#define MOUSE_CLOCK_4 12 //blanco
 
-PS2Mouse mouse(MOUSE_CLOCK, MOUSE_DATA, STREAM);
-PS2Mouse mouse2(MOUSE_CLOCK_2, MOUSE_DATA_2, STREAM);
+
+MouseDevice mouseDevice(1,5,6); // Mouse 1 en Pines 5 (data-Naranja) y 6 (clock-Blanco)
+MouseDevice mouseDevice2(2,7,8); // Mouse 2 en Pines 7 (data-Naranja) y 8 (clock-Blanco)
+MouseDevice mouseDevice3(3,10,11); // Mouse 2 en Pines 7 (data-Naranja) y 8 (clock-Blanco)
+
+
+PS2Mouse mouse3(MOUSE_CLOCK_3, MOUSE_DATA_3, STREAM);
+PS2Mouse mouse4(MOUSE_CLOCK_4, MOUSE_DATA_4, STREAM);
 
 #define colorSaturation 128
 RgbColor red(colorSaturation, 0, 0);
@@ -16,37 +23,36 @@ RgbColor green(0, colorSaturation, 0);
 RgbColor blue(0, 0, colorSaturation);
 RgbColor black(0);
 
+const int CANTIDAD_LEDS= 8;
+const int CANTIDAD_MOUSE= 3;
+const int CANTIDAD_LEDS_COLOR = 4;
 
-const int cantidadLeds= 4;
+struct LedsColor{
+    RgbColor color;
+    int cantidad;
+    int leds[CANTIDAD_LEDS];    
+};
 struct LedsEstado{
     int id;
     int cantidad;
-    RgbColor color;
-    int leds[cantidadLeds];  
+    LedsColor configuracionLed[3];  
 };
+
 
 int cantidadRatonesVivos= 0;
 bool cantidadRatonesModificada= false;
 
 
-LedsEstado estadoLeds0= {0, cantidadLeds, black,{0,1,2,3}};
-LedsEstado estadoLeds1= {1, 2, blue, {0,1}};
-LedsEstado estadoLeds2= {2, cantidadLeds, green, {0,1,2,3}};
+LedsEstado estadoLeds0= {0, 1, {{black, 8, {0,1,2,3,4,5,6,7}}}};
+LedsEstado estadoLeds1= {1, 2, {{blue, 3, {1,3,5}},{black, 5, {0,2,4,6,7}}}};
+LedsEstado estadoLeds2= {2, 3, {{blue, 3, {1,3,5}},{green, 3, {0,2,7}}, {black, 2, {4,6}}}};
+LedsEstado estadoLeds3= {3, 3, {{blue, 3, {1,3,5}},{green, 3, {0,2,7}}, {red, 2, {4,6}}}};
+//LedsEstado estadoLeds3= {3, 6, red, {0,1,2,3,4,5}};
+//LedsEstado estadoLeds4= {4, cantidadLeds, red, {0,1,2,3,4,5,6,7}};
 
 LedsEstado estadoLedsActual= estadoLeds0;
 
-struct Raton { 
-    int numero;
-    int mx;
-    int my;
-    bool estaVivo= false;
-};
-
-
-
-  Raton raton1;
-  Raton raton2;
-
+ 
 
 const uint16_t PixelCount = 8; // make sure to set this to the number of pixels in your strip
 const uint8_t PixelPin = 2;  // make sure to set this to the correct pin, ignored for Esp8266
@@ -85,10 +91,11 @@ void setupLeds()
 
 void setupMice(){
   Serial.begin(9600);
-  mouse.initialize();
-  mouse.set_resolution(02);
-  mouse2.initialize();
-  mouse2.set_resolution(02);
+  mouseDevice.setup();
+  mouseDevice2.setup();
+  mouseDevice3.setup();
+  
+  
 }
 
 void loop()
@@ -98,21 +105,11 @@ void loop()
 }
 
 void loopMice(){
-  int data[2];
-  int data2[2];
-  mouse.report(data);
-  mouse2.report(data2);
 
+ procesarEstadoMouse(&mouseDevice);
+ procesarEstadoMouse(&mouseDevice2);
+ procesarEstadoMouse(&mouseDevice3);
 
-  raton1.numero=1;
-  raton1.mx=data[1];
-  raton1.my=data[2];
-  raton2.numero=2;
-  raton2.mx=data2[1];
-  raton2.my=data2[2];
-
- procesarEstadoMouse(&raton1);
- procesarEstadoMouse(&raton2);
 
  Serial.print("Cant. Ratones vivos: ");
  Serial.print(cantidadRatonesVivos);
@@ -124,7 +121,6 @@ void loopMice(){
 void AnimUpdate(const AnimationParam& param)
 {
 
-  Serial.print("update");
     // first apply an easing (curve) to the animation
     // this simulates acceleration to the effect
     float progress = animationState[param.index].Easeing(param.progress);
@@ -141,23 +137,15 @@ void AnimUpdate(const AnimationParam& param)
     strip.SetPixelColor(param.index, updatedColor);
 }
 
-void transicionarAEstado(LedsEstado estado, RgbColor color){
-    Serial.print(estado.id );
-    uint16_t time = 200;
-    for (int i=0; i < cantidadLeds; i++){
 
-        int pixel= estadoLeds0.leds[i];
-        RgbColor targetColor = black;
-        if (i < estado.cantidad){
-          for (int j=0; j < estado.cantidad; j++){
-            if (estado.leds[j] == pixel){
-              targetColor = color;  
-            }            
-          }
-          //pixel= estado.leds[i];
-          //targetColor = color;
-        }
-
+void transicionarAEstado(LedsEstado estado){
+    
+    uint16_t time = 100;
+    for (int j=0; j < estado.cantidad; j++){
+     RgbColor color = estado.configuracionLed[j].color;
+    for (int i=0; i < estado.configuracionLed[j].cantidad; i++){
+        int pixel= estado.configuracionLed[j].leds[i];
+      RgbColor targetColor = color;
         // each animation starts with the color that was present
         RgbColor originalColor = strip.GetPixelColor(pixel);
         // and ends with a random color
@@ -204,10 +192,11 @@ void transicionarAEstado(LedsEstado estado, RgbColor color){
         // which will continue to run and call the update function until it completes
         animations.StartAnimation(pixel, time, animUpdate);        
 #endif        
-    }
+    }}
 
             animations.UpdateAnimations();
         strip.Show();
+    
 }
 
 void loopLeds()
@@ -215,16 +204,23 @@ void loopLeds()
   if (cantidadRatonesModificada){    
     
     if (cantidadRatonesVivos == 0){
-      transicionarAEstado(estadoLeds0, black);
+      transicionarAEstado(estadoLeds0);
     }    
   
     if (cantidadRatonesVivos == 1){    
-      transicionarAEstado(estadoLeds1, blue);
+      transicionarAEstado(estadoLeds1);
     }
   
     if (cantidadRatonesVivos == 2){
-      transicionarAEstado(estadoLeds2, green);
-    }   
+      transicionarAEstado(estadoLeds2);
+   }  
+    if (cantidadRatonesVivos == 3){
+      transicionarAEstado(estadoLeds3);
+    } /*      
+    if (cantidadRatonesVivos == 4){
+      transicionarAEstado(estadoLeds4, red);
+    }*/           
+    cantidadRatonesModificada= false;
   }
   else{  
     if (animations.IsAnimating()){
@@ -233,34 +229,24 @@ void loopLeds()
     }
   }
 
-  cantidadRatonesModificada= false;
-
   
 
   
+
+  
 }
 
 
-void procesarEstadoMouse(Raton *raton){
-    if (hayMovimiento(raton->mx,raton->my)){
-        if (!raton->estaVivo){
-            cantidadRatonesVivos++;
-            cantidadRatonesModificada= true;
-        }
-        raton->estaVivo= true;
-    }   
-    else{
-        if (raton->estaVivo){
-            cantidadRatonesVivos--;
-            cantidadRatonesModificada= true;
-        }
-        raton->estaVivo= false;           
-    } 
+void procesarEstadoMouse(MouseDevice *mouseDevice){
+
+  int estado= mouseDevice->procesarEstado();
+  cantidadRatonesVivos+= estado;
+  if (estado != 0){
+    cantidadRatonesModificada= true;
+  }
 }
 
-bool hayMovimiento(int mx, int my){
-  return my != 0 || mx != 0;
-}
+
 
 void SetRandomSeed()
 {

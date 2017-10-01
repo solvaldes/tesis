@@ -1,3 +1,5 @@
+#include <PS2Mouse.h>
+#include <MouseDevice.h>
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
   #include <avr/power.h>
@@ -9,6 +11,9 @@ const int CANTIDAD_LEDS_ESTADO1= 15;
 const int CANTIDAD_LEDS_ESTADO2= 33;
 const int CANTIDAD_LEDS_ESTADO3= 53;
 const int CANTIDAD_LEDS_ESTADO4= CANTIDAD_LEDS;
+MouseDevice mouseDevice(1,5,6); // Mouse 1 en Pines 5 (data-Naranja) y 6 (clock-Blanco)
+MouseDevice mouseDevice2(2,7,8); // Mouse 2 en Pines 7 (data-Naranja) y 8 (clock-Blanco)
+MouseDevice mouseDevice3(3,10,11); // Mouse 3 en Pines 10 (data-Naranja) y 11 (clock-Blanco)
 
 struct LedsEstado{
   int leds[CANTIDAD_LEDS];
@@ -20,6 +25,10 @@ LedsEstado ledsEstado1= {{},CANTIDAD_LEDS_ESTADO1, false};
 LedsEstado ledsEstado2= {{},CANTIDAD_LEDS_ESTADO2, false};
 LedsEstado ledsEstado3= {{},CANTIDAD_LEDS_ESTADO3, false};
 LedsEstado ledsEstado4= {{},CANTIDAD_LEDS_ESTADO4, false};
+
+int cantidadRatonesVivos= 0;
+bool cantidadRatonesModificada= false;
+uint16_t colorPivot=0;
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
@@ -43,10 +52,22 @@ void setup() {
   #endif
   // End of trinket special code
 
+  setupMice();
+
   SetRandomSeed();
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
   configurarEstado();
+}
+
+void setupMice(){
+  Serial.begin(9600);
+  mouseDevice.setup();
+  mouseDevice2.setup();
+  mouseDevice3.setup();
+  //mouseDevice4.setup();
+  
+  
 }
 
 void randomizarLeds(int cantidadLeds, int* leds){
@@ -88,28 +109,60 @@ void transicionarEstado(LedsEstado *ledsEstado){
 }
 
 void loopEstado1(){
-  transicionarEstado(&ledsEstado1);
-  rainbow(20, CANTIDAD_LEDS_ESTADO1, ledsEstado1.leds);
+  rainbow(20, colorPivot%256, CANTIDAD_LEDS_ESTADO1, ledsEstado1.leds);
+  colorPivot++;
 }
 
 void loopEstado2(){
-  transicionarEstado(&ledsEstado2);
-  theaterChaseRainbow(50, CANTIDAD_LEDS_ESTADO2, ledsEstado2.leds);
+  theaterChaseRainbow(50, colorPivot%256, CANTIDAD_LEDS_ESTADO2, ledsEstado2.leds);
+  colorPivot++;
 }
 
 void loopEstado3(){
-  transicionarEstado(&ledsEstado3);
-  theaterChaseRainbow(40, CANTIDAD_LEDS_ESTADO3, ledsEstado3.leds);
+  theaterChaseRainbow(40, colorPivot%256, CANTIDAD_LEDS_ESTADO3, ledsEstado3.leds);
+  colorPivot++;
 }
 
 void loopEstado4(){
-  transicionarEstado(&ledsEstado4);
  theaterChaseRainbowOriginal(50);
 }
 
 
+void loopEstado0(){
+    for (uint16_t k=0; k < CANTIDAD_LEDS;k++){
+      // Seteo el color a negro (por defecto)
+      strip.setPixelColor(k, 0);    
+      strip.show();        
+      delay(20);
+    }
+    
+}
+
+void loopMice(){
+
+ procesarEstadoMouse(&mouseDevice);
+ procesarEstadoMouse(&mouseDevice2);
+ procesarEstadoMouse(&mouseDevice3);
+//procesarEstadoMouse(&mouseDevice4);
+
+ Serial.print("Cant. Ratones vivos: ");
+ Serial.print(cantidadRatonesVivos);
+ Serial.println();
+ 
+  delay(300);  
+}
+
+void procesarEstadoMouse(MouseDevice *mouseDevice){
+
+  int estado= mouseDevice->procesarEstado();
+  cantidadRatonesVivos+= estado;
+  if (estado != 0){
+    cantidadRatonesModificada= true;
+  }
+}
+
 void loop() {
-  
+  /*
   loopEstado1();
   delay(2000);
   loopEstado2();
@@ -117,8 +170,24 @@ void loop() {
   loopEstado3();  
   delay(2000);
   loopEstado4();    
- 
-
+  */
+  loopMice();
+  if (cantidadRatonesModificada){
+    cantidadRatonesModificada= false;
+    switch (cantidadRatonesVivos) {
+      case 0: loopEstado0();break;
+      case 1: transicionarEstado(&ledsEstado1);break;
+      case 2: transicionarEstado(&ledsEstado2);break;
+      case 3: transicionarEstado(&ledsEstado3);break;
+      case 4: transicionarEstado(&ledsEstado4);break;
+    }   
+  }
+    switch (cantidadRatonesVivos) {
+      case 1: loopEstado1();break;
+      case 2: loopEstado2();break;
+      case 3: loopEstado3();break;
+      case 4: loopEstado4();break;
+    }  
 }
 
 // Fill the dots one after the other with a color
@@ -167,11 +236,10 @@ void rainbowCycle(uint8_t wait) {
   }
 }
 
-void theaterChaseRainbow(uint8_t wait, int cantidad, int leds[]) {
-  for (int j=0; j < 256; j++) {     // cycle all 256 colors in the wheel
+void theaterChaseRainbow(uint8_t wait, uint16_t colorPivot, int cantidad, int leds[]) {
     
       for (uint16_t i=0; i < cantidad; i++) {
-        strip.setPixelColor(leds[i], Wheel( (i+j) % 255));    //turn every third pixel on
+        strip.setPixelColor(leds[i], Wheel( (i+colorPivot) % 255));    //turn every third pixel on
       }
       strip.show();
 
@@ -180,19 +248,19 @@ void theaterChaseRainbow(uint8_t wait, int cantidad, int leds[]) {
       for (uint16_t i=0; i < cantidad; i++) {
         strip.setPixelColor(leds[i], 0);        //turn every third pixel off
       }
-    }  
+    
 }
 
-void rainbow(uint8_t wait, int cantidad, int leds[]) {
+void rainbow(uint8_t wait, uint16_t colorPivot, int cantidad, int leds[]) {
   uint16_t i, j;
 
-  for(j=0; j<256; j++) {
+
     for(i=0; i<cantidad; i++) {
-      strip.setPixelColor(leds[i], Wheel((i+j) & 255));
+      strip.setPixelColor(leds[i], Wheel((i+colorPivot) & 255));
     }
     strip.show();
     delay(wait);
-  }
+  
 }
 
 // Input a value 0 to 255 to get a color value.
@@ -210,22 +278,7 @@ uint32_t Wheel(byte WheelPos) {
   return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
 
-void theaterChaseRainbow(uint8_t wait) {
-  for (int j=0; j < 256; j++) {     // cycle all 256 colors in the wheel
-    for (int q=0; q < 3; q++) {
-      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, Wheel( (i+j) % 255));    //turn every third pixel on
-      }
-      strip.show();
 
-      delay(wait);
-
-      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, 0);        //turn every third pixel off
-      }
-    }
-  }
-}
 
 void SetRandomSeed()
 {

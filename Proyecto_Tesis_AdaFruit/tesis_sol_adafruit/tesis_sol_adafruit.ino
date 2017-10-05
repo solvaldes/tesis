@@ -13,7 +13,8 @@ const int CANTIDAD_LEDS_ESTADO3= 53;
 const int CANTIDAD_LEDS_ESTADO4= CANTIDAD_LEDS;
 MouseDevice mouseDevice(1,5,6); // Mouse 1 en Pines 5 (data-Naranja) y 6 (clock-Blanco)
 MouseDevice mouseDevice2(2,7,8); // Mouse 2 en Pines 7 (data-Naranja) y 8 (clock-Blanco)
-MouseDevice mouseDevice3(3,10,11); // Mouse 3 en Pines 10 (data-Naranja) y 11 (clock-Blanco)
+MouseDevice mouseDevice3(3,9,10); // Mouse 3 en Pines 9 (data-Naranja) y 10 (clock-Blanco)
+MouseDevice mouseDevice4(4,11,12); // Mouse 4 en Pines 11 (data-Naranja) y 12 (clock-Blanco)
 
 struct LedsEstado{
   int leds[CANTIDAD_LEDS];
@@ -27,6 +28,8 @@ LedsEstado ledsEstado3= {{},CANTIDAD_LEDS_ESTADO3, false};
 LedsEstado ledsEstado4= {{},CANTIDAD_LEDS_ESTADO4, false};
 
 int cantidadRatonesVivos= 0;
+int cantidadRatonesVivosAnt= 0;
+int vecesLoopEstado4= 0;
 bool cantidadRatonesModificada= false;
 uint16_t colorPivot=0;
 
@@ -65,7 +68,7 @@ void setupMice(){
   mouseDevice.setup();
   mouseDevice2.setup();
   mouseDevice3.setup();
-  //mouseDevice4.setup();
+  mouseDevice4.setup();
   
   
 }
@@ -97,19 +100,15 @@ void configurarEstado(){
 }
 
 void transicionarEstado(LedsEstado *ledsEstado){
-  ledsEstado1.iniciado=false;
-  ledsEstado2.iniciado=false;
-  ledsEstado3.iniciado=false;
-  ledsEstado4.iniciado=false;
-  if (!ledsEstado->iniciado){
-    colorWipe(strip.Color(0, 0, 255), 50, ledsEstado->cantidadLeds, ledsEstado->leds); // Blue
+
+    colorWipe(strip.Color(0, 0, 255), 40, ledsEstado->cantidadLeds, ledsEstado->leds); 
     ledsEstado->iniciado= true;
-  }
+  
  
 }
 
 void loopEstado1(){
-  rainbow(20, colorPivot%256, CANTIDAD_LEDS_ESTADO1, ledsEstado1.leds);
+  rainbow(50, tomarColorFrio1(), CANTIDAD_LEDS_ESTADO1, ledsEstado1.leds);
   colorPivot++;
 }
 
@@ -124,17 +123,22 @@ void loopEstado3(){
 }
 
 void loopEstado4(){
- theaterChaseRainbowOriginal(50);
+  if (vecesLoopEstado4 <= 30){
+    theaterChaseRainbow(40, colorPivot%256, CANTIDAD_LEDS_ESTADO4, ledsEstado4.leds);
+          vecesLoopEstado4++;
+     Serial.println(vecesLoopEstado4);     
+  }
+  else{
+    theaterChaseRainbowOriginal(20);  
+    vecesLoopEstado4= 0;
+  }
 }
 
 
 void loopEstado0(){
-    for (uint16_t k=0; k < CANTIDAD_LEDS;k++){
-      // Seteo el color a negro (por defecto)
-      strip.setPixelColor(k, 0);    
-      strip.show();        
-      delay(20);
-    }
+  
+      colorWipe(strip.Color(0, 0, 255), 20, CANTIDAD_LEDS, ledsEstado4.leds); 
+
     
 }
 
@@ -143,7 +147,7 @@ void loopMice(){
  procesarEstadoMouse(&mouseDevice);
  procesarEstadoMouse(&mouseDevice2);
  procesarEstadoMouse(&mouseDevice3);
-//procesarEstadoMouse(&mouseDevice4);
+ procesarEstadoMouse(&mouseDevice4);
 
  Serial.print("Cant. Ratones vivos: ");
  Serial.print(cantidadRatonesVivos);
@@ -154,32 +158,24 @@ void loopMice(){
 
 void procesarEstadoMouse(MouseDevice *mouseDevice){
 
-  int estado= mouseDevice->procesarEstado();
+  int estado= mouseDevice->procesarEstado();  
   cantidadRatonesVivos+= estado;
-  if (estado != 0){
+  if (estado != 0){    
     cantidadRatonesModificada= true;
-  }
+  }  
 }
 
 void loop() {
-  /*
-  loopEstado1();
-  delay(2000);
-  loopEstado2();
-  delay(2000);
-  loopEstado3();  
-  delay(2000);
-  loopEstado4();    
-  */
+  cantidadRatonesVivosAnt= cantidadRatonesVivos;
   loopMice();
   if (cantidadRatonesModificada){
     cantidadRatonesModificada= false;
     switch (cantidadRatonesVivos) {
       case 0: loopEstado0();break;
-      case 1: transicionarEstado(&ledsEstado1);break;
-      case 2: transicionarEstado(&ledsEstado2);break;
-      case 3: transicionarEstado(&ledsEstado3);break;
-      case 4: transicionarEstado(&ledsEstado4);break;
+      case 1: if(cantidadRatonesVivosAnt == 0){transicionarEstado(&ledsEstado1);};break;
+      case 2: if(cantidadRatonesVivosAnt == 0){transicionarEstado(&ledsEstado2);};break;
+      case 3: if(cantidadRatonesVivosAnt == 0){transicionarEstado(&ledsEstado3);};break;
+      case 4: if(cantidadRatonesVivosAnt == 0){transicionarEstado(&ledsEstado4);};break;
     }   
   }
     switch (cantidadRatonesVivos) {
@@ -199,7 +195,22 @@ void colorWipe(uint32_t c, uint8_t wait, int cantidad, int leds[]) {
     // Recorro los leds asignados al arreglo recibido para verificar si el led actual debe prenderse con el color indicado
     for (uint16_t l=0; l < cantidad;l++){
       if (k == leds[l]){
-        strip.setPixelColor(leds[l], c);
+                        if (cantidadRatonesVivos == 0){
+          strip.setPixelColor(leds[l], 0);    //turn every third pixel on
+        }
+                if (cantidadRatonesVivos == 1){
+          strip.setPixelColor(leds[l], tomarColorFrio1());    //turn every third pixel on
+        }
+        if (cantidadRatonesVivos == 2){
+          strip.setPixelColor(leds[l], tomarColorFrio2());    //turn every third pixel on
+          }       
+          if (cantidadRatonesVivos == 3){
+          strip.setPixelColor(leds[l], tomarColorCalido1());    //turn every third pixel on
+          }
+          if (cantidadRatonesVivos == 4){
+          strip.setPixelColor(leds[l], tomarColorCalido2());    //turn every third pixel on
+          } 
+        
       }
     }
     strip.show();      
@@ -208,10 +219,10 @@ void colorWipe(uint32_t c, uint8_t wait, int cantidad, int leds[]) {
 }
 
 void theaterChaseRainbowOriginal(uint8_t wait) {
-  for (int j=0; j < 256; j++) {     // cycle all 256 colors in the wheel
+  for (int j=0; j < 256; j++) {
     for (int q=0; q < 3; q++) {
       for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, Wheel( (i+j) % 255));    //turn every third pixel on
+        strip.setPixelColor(i+q, tomarColorCalido2());    //turn every third pixel on
       }
       strip.show();
 
@@ -221,7 +232,7 @@ void theaterChaseRainbowOriginal(uint8_t wait) {
         strip.setPixelColor(i+q, 0);        //turn every third pixel off
       }
     }
-  }
+  } 
 }
 
 void rainbowCycle(uint8_t wait) {
@@ -239,7 +250,18 @@ void rainbowCycle(uint8_t wait) {
 void theaterChaseRainbow(uint8_t wait, uint16_t colorPivot, int cantidad, int leds[]) {
     
       for (uint16_t i=0; i < cantidad; i++) {
-        strip.setPixelColor(leds[i], Wheel( (i+colorPivot) % 255));    //turn every third pixel on
+        if (cantidadRatonesVivos == 1){
+          strip.setPixelColor(leds[i], tomarColorFrio1());    //turn every third pixel on
+        }
+        if (cantidadRatonesVivos == 2){
+          strip.setPixelColor(leds[i], tomarColorFrio2());    //turn every third pixel on
+          }       
+          if (cantidadRatonesVivos == 3){
+          strip.setPixelColor(leds[i], tomarColorCalido1());    //turn every third pixel on
+          }
+          if (cantidadRatonesVivos == 4){
+          strip.setPixelColor(leds[i], tomarColorCalido2());    //turn every third pixel on
+          }          
       }
       strip.show();
 
@@ -255,13 +277,64 @@ void rainbow(uint8_t wait, uint16_t colorPivot, int cantidad, int leds[]) {
   uint16_t i, j;
 
 
-    for(i=0; i<cantidad; i++) {
-      strip.setPixelColor(leds[i], Wheel((i+colorPivot) & 255));
+    for(i=0; i<cantidad; i++) {        
+        int color= tomarColorFrio1();
+        strip.setPixelColor(leds[i], color);
     }
-    strip.show();
+    strip.show();    
     delay(wait);
   
 }
+
+uint32_t tomarColorFrio1(){
+  int valorRojo= random(132);
+  int valorAzul= random(255-128) + 128;
+  int valorVerde= random(100);
+  return strip.Color(valorRojo,valorVerde,valorAzul);  
+}
+
+uint32_t tomarColorFrio2(){
+  int morado= random(2);
+  if (morado == 1){
+    int valorRojo= random(206-128) + 128;
+    int valorAzul= random(128-99) + 99;    
+    return strip.Color(valorRojo,0,valorAzul);  
+
+  }
+  else{
+     int valorVerde= random(255-160) + 160;
+     int valorAzul= random(140);    
+      return strip.Color(0,valorVerde,valorAzul);    
+  }
+}
+
+uint32_t tomarColorCalido1(){
+  int calido= random(10);
+  if (calido > 4){
+     int valorVerde= random(255-156) + 156;      
+      return strip.Color(255,valorVerde,0);        
+   }
+   else{
+      return tomarColorFrio2(); 
+    }
+}
+
+uint32_t tomarColorCalido2(){
+  int calido= random(20);
+  if (calido > 10){
+     int valorVerde= random(156);       
+      return strip.Color(255,valorVerde,0);        
+   }
+   else{
+      if (calido > 10 && calido <= 15){
+        return tomarColorCalido1();
+      }
+      else{
+        return tomarColorFrio2(); 
+      }
+    }
+}
+
 
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
